@@ -30,7 +30,7 @@ Caveats
 6. Test function release of socket bindings seem to sometimes fail. Re-execute rebar3 eunit after possibly waiting first, if this happens. Although this is not seen anymore on author's development system, the issue may crop up in other development environments/platforms. Again have not investigated the cause.
 7. Modbus over TCP functionality, not fully supported, and has not been continually tested against external systems.
 8. Pipe semantic not fully flushed out.
-9. Logging system does not provide 3rd party developers to control/overide logging mechanism.
+9. Logging system does not provide 3rd party developers with mechanism to control/overide logging mechanism.
 10. Tested on OS X with erlang 18.1.
 
 
