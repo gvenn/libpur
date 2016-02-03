@@ -27,7 +27,7 @@ Caveats
 3. Code test coverage not complete
 4. XDR modules have not yet been tested against native (C, other), libraries
 5. Some test modules seem to execute twice, which is believed to be due to incorrect use of ...test_ functions. Have not had time to investigate this.
-6. Test function release of socket bindings seem to sometimes fail. Re-execute rebar3 eunit after possibly waiting first, if this happens. Although this is not seen anymore on authors development system, the issue may crop up in other development environments/platforms. Again have not investigated the cause.
+6. Test function release of socket bindings seem to sometimes fail. Re-execute rebar3 eunit after possibly waiting first, if this happens. Although this is not seen anymore on author's development system, the issue may crop up in other development environments/platforms. Again have not investigated the cause.
 7. Modbus over TCP functionality, not fully supported, and has not been continually tested against external systems.
 8. Pipe semantic not fully flushed out.
 9. Tested on OS X with erlang 18.1.
