@@ -1,0 +1,263 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%   Copyright 2016 Purvey, Inc.
+%%
+%%   Licensed under the Apache License, Version 2.0 (the "License");
+%%   you may not use this file except in compliance with the License.
+%%   You may obtain a copy of the License at
+%%
+%%       http://www.apache.org/licenses/LICENSE-2.0
+%%
+%%   Unless required by applicable law or agreed to in writing, software
+%%   distributed under the License is distributed on an "AS IS" BASIS,
+%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%   See the License for the specific language governing permissions and
+%%   limitations under the License.
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% @author: Garrison M. Venn
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-module(pur_generic_pipe_server).
+
+-behavior(pur_utls_pipe_server).
+
+-export([spawn/4, spawn/3,
+         handle_call/3, handle_cast/2, handle_info/2, handle_pipe/2,
+         terminate/2, code_change/3,
+         init/1]).
+
+-include_lib("pur_utls_misc.hrl").
+-include_lib("pur_utls_props.hrl").
+-include_lib("pur_utls_pipes.hrl").
+
+%%----------------------------------------------------------------------------
+%% Records
+%%----------------------------------------------------------------------------
+
+-record(state, {var1, var2}).
+
+%%----------------------------------------------------------------------------
+%% "Init" Behavior
+%%----------------------------------------------------------------------------
+
+init(Props) -> 
+    InitFunctions =
+        [fun init_var1/3,
+         fun (NProps, _Context, State) -> init_var2(NProps, State) end,
+         fun(_NProps, {_Var1Mod, Var2Mod}, State = #state{var2 = Value}) ->
+             {true, State#state{var2 = Value * Var2Mod}}
+         end],
+    pur_utls_server:auto_init(
+        Props,
+        [#propdesc{name = "var1", 
+                   index = #state.var1,
+                   ret_type = atom,
+                   directive = required,
+                   dirvalue = true},
+         #propdesc{name = "var2",
+                   index = #state.var2,
+                   ret_type = integer,
+                   directive = default,
+                   dirvalue = 999}],
+        InitFunctions,
+        {1, 3},
+        #state{}).
+
+terminate(Reason, State) ->
+    case Reason of
+        normal -> ok;
+        shutdown -> ok;
+        {shutdown, _} -> ok;
+        Reason -> ?LogIt(terminate,
+                         "Terminated for reason: ~n~p, ~nwith state:~n~p.",
+                         [Reason, CState])
+    end.
+
+code_change(_, State, _) -> 
+    {ok, State}.
+
+%%----------------------------------------------------------------------------
+%% Genserver Exported Behavior
+%%----------------------------------------------------------------------------
+
+%%----------------------------------------------------------------------------
+%% handle_call
+%%----------------------------------------------------------------------------
+
+%%----------------------------------------------------------------------------
+%% get
+%%----------------------------------------------------------------------------
+
+handle_call({get, VarNum}, _From, State) when is_integer(VarNum) ->
+    Reply = case VarNum of
+                1 -> State#state.var1;
+                2 -> State#state.var2;
+                _ -> undefined
+            end,
+    {reply, Reply, State};
+
+%%----------------------------------------------------------------------------
+%% dump_state
+%%----------------------------------------------------------------------------
+
+handle_call(dumpState, _From, State) ->
+    {reply, State, State};
+
+%%----------------------------------------------------------------------------
+%% Unknown call expression
+%%----------------------------------------------------------------------------
+
+handle_call(Expr, _From, State) ->
+    ?LogIt({handle_call, unknown}, "Unknown expr: ~n~p. ~nIgnoring", [Expr]),
+    {reply, ok, State}.
+
+%%----------------------------------------------------------------------------
+%% handle_cast
+%%----------------------------------------------------------------------------
+
+%%----------------------------------------------------------------------------
+%% get
+%%----------------------------------------------------------------------------
+
+handle_cast({get, VarNum, {From, Term}}, State) when is_integer(VarNum) ->
+    Value = case VarNum of
+                1 -> State#state.var1;
+                2 -> State#state.var2;
+                _ -> undefined
+            end,
+    gen_server:cast(From, {Term, Value}), 
+    {noreply, State};
+
+%%----------------------------------------------------------------------------
+%% add
+%%----------------------------------------------------------------------------
+
+handle_cast({add, VarNum, By}, State = #state{var2 = Value}) when 
+        VarNum == 2, is_integer(By) ->
+    {noreply, State#state{var2 = Value + By}};
+
+%%----------------------------------------------------------------------------
+%% dump_state
+%%----------------------------------------------------------------------------
+
+handle_cast({dumpState, {From, Term}}, State) ->
+    gen_server:cast(From, {Term, State}),
+    {noreply, State};
+
+%%----------------------------------------------------------------------------
+%% Unknown cast expression
+%%----------------------------------------------------------------------------
+
+handle_cast(Expr, State) ->
+    ?LogIt({handle_cast, unknown}, "Unknown expr: ~n~p. ~nIgnoring", [Expr]),
+    {noreply, State}.
+
+%%----------------------------------------------------------------------------
+%% handle_info
+%%----------------------------------------------------------------------------
+
+%%----------------------------------------------------------------------------
+%% Unknown info expression
+%%----------------------------------------------------------------------------
+
+handle_info(Expr, State) ->
+    ?LogIt({handle_info, unknown}, "Unknown expr: ~n~p. ~nIgnoring", [Expr]),
+    {noreply, State}.
+
+%%----------------------------------------------------------------------------
+%% handle_pipe
+%%----------------------------------------------------------------------------
+
+%%----------------------------------------------------------------------------
+%% get pipe expression
+%%----------------------------------------------------------------------------
+
+handle_pipe({#pipe_context{session_id = SessionId}, get, VarNum}, State) ->
+    Reply = case VarNum of
+                1 -> State#state.var1;
+                2 -> -> State#state.var2;
+                _ -> undefined
+            end,
+    {reply, Reply, SessionId, State};
+
+%%----------------------------------------------------------------------------
+%% set pipe expression
+%%----------------------------------------------------------------------------
+
+handle_pipe({#pipe_context{session_id = SessionId}, set, {VarNum, Value}}, 
+            State) ->
+    {Reply, NState} =
+        case VarNum of
+            1 -> {Value, State#state{var1 = Value}};
+            2 -> -> {Value, State#state{var2 = Value}};
+            _ -> {undefined, State}
+        end,
+    {reply, Reply, SessionId, NState};
+
+%%----------------------------------------------------------------------------
+%% Unknown pipe expression
+%%----------------------------------------------------------------------------
+
+handle_pipe({#pipe_context{session_id = SessionId}, _Term, Expr}, State) ->
+    % Skips to next in pipe
+    {reply, Expr, SessionId, State}.
+
+%%----------------------------------------------------------------------------
+%% Exported Functions
+%%----------------------------------------------------------------------------
+
+%%----------------------------------------------------------------------------
+%% "Spawn" Behavior
+%%----------------------------------------------------------------------------
+
+spawn(nolink, Name = {global, _RegName}, StartArgs, StartOptions) ->
+    NStartArgs = [{callback_module, ?MODULE}|StartArgs],
+    pur_utls_pipe_server:spawn(nolink, Name, NStartArgs, StartOptions);
+spawn(nolink, Name = {local, _RegName}, StartArgs, StartOptions) ->
+    NStartArgs = [{callback_module, ?MODULE}|StartArgs],
+    pur_utls_pipe_server:spawn(nolink, Name, NStartArgs, StartOptions);
+spawn(link, Name = {global, _RegName}, StartArgs, StartOptions) ->
+    NStartArgs = [{callback_module, ?MODULE}|StartArgs],
+    pur_utls_pipe_server:spawn(link, Name, NStartArgs, StartOptions);
+spawn(link, Name = {local, _RegName}, StartArgs, StartOptions) ->
+    NStartArgs = [{callback_module, ?MODULE}|StartArgs],
+    pur_utls_pipe_server:spawn(link, Name, NStartArgs, StartOptions).
+
+spawn(nolink, StartArgs, StartOptions) ->
+    NStartArgs = [{callback_module, ?MODULE}|StartArgs],
+    pur_utls_pipe_server:spawn(nolink, NStartArgs, StartOptions);
+spawn(link, StartArgs, StartOptions) ->
+    NStartArgs = [{callback_module, ?MODULE}|StartArgs],
+    pur_utls_pipe_server:spawn(link, NStartArgs, StartOptions).
+
+%%----------------------------------------------------------------------------
+%% Internal Functions
+%%----------------------------------------------------------------------------
+
+%%----------------------------------------------------------------------------
+%% init_var1
+%%----------------------------------------------------------------------------
+
+init_var1(_Props, _Context, State = #state{var1 = exit}) ->
+    {false, "init_var1 forced exit", State};
+init_var1(_Props, _Context, State = #state{var1 = reset}) ->
+    {true, State#state{var1 = set}};
+init_var1(_Props, _Context, State) ->
+    {true, State}.
+
+%%----------------------------------------------------------------------------
+%% init_var2
+%%----------------------------------------------------------------------------
+
+init_var2(Props, State = #state{var2 = 0}) ->
+    pur_utls_props:set_from_props(
+        Props,
+        [#propdesc{name = other,
+                   index = #state.var2,
+                   ret_type = integer,
+                   directive = required,
+                   dirvalue = true}],
+        State);
+init_var2(_Props, State) ->
+    {true, State}.
+
