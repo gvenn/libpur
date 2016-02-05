@@ -75,12 +75,13 @@ init(Props) ->
                    directive = default,
                    dirvalue = fun retrieve_type_for_simple_header/1,
                    validation =
-                       fun (ToCheck, _Props, _Desc, _, _TupleContext) ->
+                       fun (ToCheck, _Props, _Desc, _Context, _TupleContext) ->
                            if
                                is_function(ToCheck, 1) ->
                                    ToCheck;
                                true ->
-                                   {error, "header_decoder is not a function"}
+                                   {error, "header_decoder is not a "
+                                               "function of arity 1."}
                            end
                        end},
          #propdesc{name = "xdr_args_map", 
