@@ -344,9 +344,9 @@ listen_cont(State = #state{socket = Socket,
         {error, Reason} ->
             ?LogIt(
                 listen_cont,
-                "accept received: ~p. Will force close socket. Will attempt "
-                    "automatic listen socket re-creation. If this fails, "
-                    "another start message must be received for this "
+                "accept received: ~n~p. ~nWill force close socket. Will "
+                    "attempt automatic listen socket re-creation. If this "
+                    "fails, another start message must be received for this "
                     "service to be re-run. Not exiting.",
                 [Reason]),
             gen_server:cast(self(), start),
@@ -404,7 +404,7 @@ spawn_comm_server(CommSocket,
         {error, Reason} ->
             ?LogIt(
                 spawn_comm_server,
-                "Received: ~p, when starting comm server of "
+                "Received: ~n~p, ~nwhen starting comm server of "
                     "module: ~p. Not sure what to do with this since "
                         "nothing at this time will receive this error. "
                         "Ignoring error.",

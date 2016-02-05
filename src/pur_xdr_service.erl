@@ -31,14 +31,14 @@
 -include_lib("pur_utls_props.hrl").
 -include_lib("pur_utls_pipes.hrl").
 
--define(TypeHeaderSize, 4).
-
 %%----------------------------------------------------------------------------
 %% Records
 %%----------------------------------------------------------------------------
 
 -record(state, {socket,
                 xdr_codecs,
+                header_length,
+                header_decoder,
                 xdr_args_map,
                 service_pipe,
                 % Not really used
@@ -65,6 +65,24 @@ init(Props) ->
                    index = #state.socket,
                    directive = required,
                    dirvalue = true},
+         #propdesc{name = "header_length", 
+                   index = #state.header_length,
+                   ret_type = integer,
+                   directive = required,
+                   dirvalue = true},
+         #propdesc{name = "header_decoder", 
+                   index = #state.header_decoder,
+                   directive = default,
+                   dirvalue = fun retrieve_type_for_simple_header/1,
+                   validation =
+                       fun (ToCheck, _Props, _Desc, _, _TupleContext) ->
+                           if
+                               is_function(ToCheck, 1) ->
+                                   ToCheck;
+                               true ->
+                                   {error, "header_decoder is not a function"}
+                           end
+                       end},
          #propdesc{name = "xdr_args_map", 
                    index = #state.xdr_args_map,
                    ret_type = map,
@@ -280,8 +298,9 @@ exit_service(State = #state{server_ref = Ref}) ->
 %% cont_service
 %%----------------------------------------------------------------------------
 
-cont_service(State = #state{recv_server = Server}) ->
-    gen_server:cast(Server, {read_next_payload, ?TypeHeaderSize}),
+cont_service(State = #state{recv_server = Server,
+                            header_length = Length}) ->
+    gen_server:cast(Server, {read_next_payload, Length}),
     State.
 
 %%----------------------------------------------------------------------------
@@ -307,31 +326,62 @@ close(State = #state{recv_server = Server}) ->
 
 handle_received_payload({error, Reason}, State) ->
     ?LogIt(handle_received_payload, 
-           "Error: ~p received while retrieving type. Exiting.",
+           "Error: ~p received while retrieving header. Exiting.",
            [Reason]),
     EState = exit_service(State),
     {noreply, EState};
-handle_received_payload({ok, RawType},
+handle_received_payload({ok, RawHeader},
                         State = #state{xdr_codecs = Codecs,
                                        xdr_args_map = XdrMap,
                                        io = Io}) ->
     % GDEBUG
-    ?LogIt(handle_received_payload, "RawType: ~p.", [RawType]),
-    {Type, _} = pur_utls_xdr:decode_uint(RawType, #call_args{}),
-    case maps:find(Type, XdrMap) of
-        {ok, XdrCallArgs} ->
-            CallArgs = XdrCallArgs#call_args{codec_env = Codecs},
-            % Allow errors to flow to next stage in pipe. REVISIT
-            % Valid Result will be: {ok, ResultValue}
-            %     while error Result will be: {error, Reason}.
-            {Result, NIo} = pur_utls_xdr:decode_generic(CallArgs, Io),
-            IoState = State#state{io = NIo},
-            FState = cont_service(IoState),
-            {reply, Result, FState};
-        error ->
+    %?LogIt(handle_received_payload, "RawHeader: ~p.", [RawHeader]),
+    case decode_header_and_type(RawHeader, State) of
+        {{ok, {Type, Header}}, NState} ->
+            case maps:find(Type, XdrMap) of
+                {ok, XdrCallArgs} ->
+                    CallArgs = XdrCallArgs#call_args{codec_env = Codecs},
+                    % Allow errors to flow to next stage in pipe. REVISIT
+                    % Valid Result will be: {ok, ResultValue}
+                    %     while error Result will be: {error, Reason}.
+                    {{ok, Payload}, NIo} = 
+                        pur_utls_xdr:decode_generic(CallArgs, Io),
+                    IoState = NState#state{io = NIo},
+                    FState = cont_service(IoState),
+                    {reply, {ok, {Header, Payload}}, FState};
+                error ->
+                    ?LogIt(handle_received_payload, 
+                           "Type: ~p not supported. Exiting",
+                           [Type]),
+                    EState = exit_service(State),
+                    {noreply, EState}
+            end;
+        {{error, Reason}, NState} ->
             ?LogIt(handle_received_payload, 
-                   "Type: ~p not supported. Exiting",
-                   [Type]),
-            EState = exit_service(State),
+                   "Problem returning type for reason: ~p. Exiting",
+                   [Reason]),
+            EState = exit_service(NState),
             {noreply, EState}
     end.
+
+%%----------------------------------------------------------------------------
+%% retrieve_type
+%%----------------------------------------------------------------------------
+
+decode_header_and_type(RawHeader, 
+                       State = #state{header_decoder = DecodeHeaderAndType}) ->
+    {DecodeHeaderAndType(RawHeader), State}.
+
+%%----------------------------------------------------------------------------
+%% retrieve_type_for_simple_header
+%%----------------------------------------------------------------------------
+
+% Pure function
+
+retrieve_type_for_simple_header(RawType) ->
+    case pur_utls_xdr:decode_uint(RawType, #call_args{}) of
+        {Type, _} -> {ok, {Type, Type}};
+        _ -> {error, "XDR uint decode problem"}
+    end.
+            
+

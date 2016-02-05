@@ -144,7 +144,7 @@ generate_struct_params() ->
     {?TestType,
      #call_args{etype = struct, call_args = OuterMetaData, codec_env = Codecs},
      [{["begin", {10, InnerData}, "end"],
-       {ok, ["begin", InnerData, "end"]}}]}.
+       {ok, {?TestType, ["begin", InnerData, "end"]}}}]}.
 
 xdr_send_multiple_and_wait_test() ->
     Port = 10001,
@@ -172,8 +172,12 @@ xdr_send_multiple_and_wait_test() ->
                       pipe_name = main}],
     AcceptServer = xdr_test_accept_server,
     {Type, CallArgs, CallTestData} = generate_struct_params(),
+    % GDEBUG
+    %EncType = pur_utls_xdr:encode_uint(16#01, CallArgs),
+    EncType = pur_utls_xdr:encode_uint(Type, CallArgs),
     AcceptArgs = [{port, Port}, 
                   {comm_module, pur_xdr_service},
+                  {header_length, byte_size(EncType)},
                   {xdr_args_map, #{Type => CallArgs}},
                   {service_pipe, Pipe}],
     AM:spawn(link, {local, AcceptServer}, AcceptArgs, []),
@@ -182,9 +186,6 @@ xdr_send_multiple_and_wait_test() ->
     Asserts = 
         lists:map(
             fun ({CallData, TestData}) ->
-                % GDEBUG
-                %EncType = pur_utls_xdr:encode_uint(16#01, CallArgs),
-                EncType = pur_utls_xdr:encode_uint(Type, CallArgs),
                 EncPayload = pur_utls_xdr:encode_generic(CallData, CallArgs),
                 ToSend = 
                     <<EncType/bitstring, EncPayload/bitstring>>,
@@ -233,8 +234,12 @@ xdr_send_multiple_and_wait_direct_test() ->
                       pipe_name = main}],
     AcceptServer = xdr_test_accept_server,
     {Type, CallArgs, CallTestData} = generate_struct_params(),
+    % GDEBUG
+    %EncType = pur_utls_xdr:encode_uint(16#01, CallArgs),
+    EncType = pur_utls_xdr:encode_uint(Type, CallArgs),
     AcceptArgs = [{port, Port}, 
                   {comm_module, pur_xdr_service},
+                  {header_length, byte_size(EncType)},
                   {xdr_args_map, #{Type => CallArgs}},
                   {read_with_actor, false},
                   {service_pipe, Pipe}],
@@ -244,9 +249,6 @@ xdr_send_multiple_and_wait_direct_test() ->
     Asserts = 
         lists:map(
             fun ({CallData, TestData}) ->
-                % GDEBUG
-                %EncType = pur_utls_xdr:encode_uint(16#01, CallArgs),
-                EncType = pur_utls_xdr:encode_uint(Type, CallArgs),
                 EncPayload = pur_utls_xdr:encode_generic(CallData, CallArgs),
                 ToSend = 
                     <<EncType/bitstring, EncPayload/bitstring>>,

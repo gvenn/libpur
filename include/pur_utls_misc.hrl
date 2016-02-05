@@ -26,9 +26,15 @@
 -define(LogItMessage(FunctionId, SuffixFormat),
         ?LogItMessage(FunctionId, SuffixFormat, [])).
 
+%-define(LogItMessage(FunctionId, SuffixFormat, Args),
+%        io_lib:format("~p:~p " ++ SuffixFormat, 
+%                      [?MODULE, FunctionId|Args])).
+
 -define(LogItMessage(FunctionId, SuffixFormat, Args),
-        io_lib:format("~p:~p " ++ SuffixFormat, 
-                      [?MODULE, FunctionId|Args])).
+    io_lib:format(
+        "~s", 
+        [lists:flatten(io_lib:format("~p:~p " ++ SuffixFormat,
+                                     [?MODULE, FunctionId|Args]))])).
 
 -define(LogItWithTraceMessage(FunctionId, SuffixFormat),
         ?LogItWithTraceMessage(FunctionId, SuffixFormat, [])).

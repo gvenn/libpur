@@ -41,6 +41,8 @@ auto_set(Props, Descriptors, Functions, ExecContext, ToSet) ->
             {false, 
              "pur_utls_props:set_from_props(...) failed.", 
              PartialToSet};
+        {false, Reason, PartialToSet} -> 
+            {false, Reason, PartialToSet};
         {true, NToSet} ->
             case run_through(Functions, Props, ExecContext, NToSet) of
                 R = {true, _FToSet} -> R;
