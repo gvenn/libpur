@@ -73,15 +73,16 @@ init(Props) ->
          #propdesc{name = "header_decoder", 
                    index = #state.header_decoder,
                    directive = default,
-                   dirvalue = fun retrieve_type_for_simple_header/1,
+                              % code reload
+                   dirvalue = fun retrieve_type_for_simple_header/2,
                    validation =
                        fun (ToCheck, _Props, _Desc, _Context, _TupleContext) ->
                            if
-                               is_function(ToCheck, 1) ->
+                               is_function(ToCheck, 2) ->
                                    ToCheck;
                                true ->
                                    {error, "header_decoder is not a "
-                                               "function of arity 1."}
+                                               "function of arity 2."}
                            end
                        end},
          #propdesc{name = "xdr_args_map", 
@@ -370,8 +371,9 @@ handle_received_payload({ok, RawHeader},
 %%----------------------------------------------------------------------------
 
 decode_header_and_type(RawHeader, 
-                       State = #state{header_decoder = DecodeHeaderAndType}) ->
-    {DecodeHeaderAndType(RawHeader), State}.
+                       State = #state{xdr_codecs = Codecs,
+                                      header_decoder = DecodeHeaderAndType}) ->
+    {DecodeHeaderAndType(RawHeader, Codecs), State}.
 
 %%----------------------------------------------------------------------------
 %% retrieve_type_for_simple_header
@@ -379,7 +381,7 @@ decode_header_and_type(RawHeader,
 
 % Pure function
 
-retrieve_type_for_simple_header(RawType) ->
+retrieve_type_for_simple_header(RawType, _Codecs) ->
     case pur_utls_xdr:decode_uint(RawType, #call_args{}) of
         {Type, _} -> {ok, {Type, Type}};
         _ -> {error, "XDR uint decode problem"}
