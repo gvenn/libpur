@@ -1,0 +1,14 @@
+language: erlang
+notifications:
+  email: ben@nothingmuch.com
+otp_release:
+  - 18.2
+  - 18.1
+  - 18.0
+  - 17.5
+  - 17.4
+  - 17.3
+  - 17.1
+  - 17.0
+script:
+  - ./rebar3 eunit
