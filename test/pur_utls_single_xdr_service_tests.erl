@@ -147,6 +147,8 @@ generate_struct_params() ->
      ["begin", {10, InnerData}, "end"],
      ["begin", InnerData, "end"]}.
 
+-ifdef(pur_supports_18).
+
 xdr_send_struct_and_wait_test() ->
     E = fun (Expr) -> element(1, Expr) end,
     Port = 10000,
@@ -270,6 +272,136 @@ xdr_send_multiple_and_wait_test() ->
                                               SocketServer, 
                                               RespondServer])
     end.
+
+-else. % pur_supports_18
+
+xdr_send_struct_and_wait_test() ->
+    E = fun (Expr) -> element(1, Expr) end,
+    Port = 10000,
+    DelaySendArgs = [{pipe_module, pur_utls_single_xdr_service_tests},
+                     {pipe_fun, delay_send},
+                     {fun_state, #delay_state{delay_with = 1000}}],
+    ResponseArgs = [{pipe_module, pur_utls_single_xdr_service_tests},
+                    {pipe_fun, response_pipe_fun},
+                    {fun_state, #response_state{}},
+                    {call_module, pur_utls_single_xdr_service_tests},
+                    {call_fun, response_call_fun},
+                    {cast_module, pur_utls_single_xdr_service_tests},
+                    {cast_fun, response_cast_fun}],
+    SocketServerArgs = [{port, Port}, {size_length, 4}],
+    DelayServer = start_server(pur_utls_fun_pipe, link, DelaySendArgs, []),
+    RespondServer = start_server(pur_utls_fun_pipe, link, ResponseArgs, []),
+    SocketServer = start_server(pur_utls_single_xdr_service, 
+                                link, 
+                                SocketServerArgs, 
+                                []),
+    Pipe = [#pipecomp{name = delay_send, 
+                      type = cast, 
+                      exec = send, 
+                      to = DelayServer, 
+                      pipe_name = main},
+            #pipecomp{name = retreive_by_xdr,
+                      type = cast, 
+                      exec = next_xdr_args, 
+                      to = SocketServer, 
+                      pipe_name = main},
+            #pipecomp{name = respond, 
+                      type = cast, 
+                      exec = set_response, 
+                      to = RespondServer, 
+                      pipe_name = main}],
+    gen_server:call(SocketServer, start_server),
+    Socket = connect(Port),
+    {CallArgs, StructData, TestData} = generate_struct_params(),
+    ToSend = pur_utls_xdr:encode_struct(StructData, CallArgs),
+    send(ToSend, Socket),
+    pur_utls_pipes:send_to_next(CallArgs, "xxxx.1", Pipe),
+    Response = gen_server:call(RespondServer, wait_for_response),
+    %?LogIt(xdr_send_and_wait_test, "Response: ~n    ~p.", [Response]),
+
+    % Must be done first or else port binding is not released in time
+    %     for next run with same port.
+    gen_tcp:close(Socket),
+    % stop_server message is redundant to gen_server:stop(...) which
+    %     must be done to exit the gen_server and allow follow on tests
+    %     to use a new server with the same registered name.
+    gen_server:call(SocketServer, stop_server),
+    lists:foreach(fun (ToKill) -> gen_server:call(ToKill, kill) end, 
+                  [DelayServer, 
+                   SocketServer, 
+                   RespondServer]),
+    ?assert(TestData =:= E(Response)).
+
+xdr_send_multiple_and_wait_test() ->
+    E = fun (Expr) -> element(1, Expr) end,
+    Port = 10000,
+    DelaySendArgs = [{pipe_module, pur_utls_single_xdr_service_tests},
+                     {pipe_fun, delay_send},
+                     {fun_state, #delay_state{delay_with = 1000}}],
+    ResponseArgs = [{pipe_module, pur_utls_single_xdr_service_tests},
+                    {pipe_fun, response_pipe_fun},
+                    {fun_state, #response_state{}},
+                    {call_module, pur_utls_single_xdr_service_tests},
+                    {call_fun, response_call_fun},
+                    {cast_module, pur_utls_single_xdr_service_tests},
+                    {cast_fun, response_cast_fun}],
+    SocketServerArgs = [{port, Port}, {size_length, 4}],
+    DelayServer = start_server(pur_utls_fun_pipe, link, DelaySendArgs, []),
+    RespondServer = start_server(pur_utls_fun_pipe, link, ResponseArgs, []),
+    SocketServer = start_server(pur_utls_single_xdr_service, 
+                                link, 
+                                SocketServerArgs, 
+                                []),
+    Pipe = [#pipecomp{name = delay_send, 
+                      type = cast, 
+                      exec = send, 
+                      to = DelayServer, 
+                      pipe_name = main},
+            #pipecomp{name = retreive_by_xdr,
+                      type = cast, 
+                      exec = next_xdr_args, 
+                      to = SocketServer, 
+                      pipe_name = main},
+            #pipecomp{name = respond, 
+                      type = cast, 
+                      exec = set_response, 
+                      to = RespondServer, 
+                      pipe_name = main}],
+    gen_server:call(SocketServer, start_server),
+    Socket = connect(Port),
+    try
+        Params = [generate_struct_params()],
+        _Ret = 
+            lists:map(
+                fun ({CallArgs, Data, TestWith}) ->
+                    ToSend = pur_utls_xdr:encode_generic(Data, CallArgs),
+                    send(ToSend, Socket),
+                    pur_utls_pipes:send_to_next(CallArgs, "xxxx.1", Pipe),
+                    Response = gen_server:call(RespondServer, 
+                                               wait_for_response),
+                    ?assert(TestWith =:= E(Response))
+                end,
+                Params),
+        %lists:foreach(fun gen_server:stop/1, [DelayServer, 
+        %                                      SocketServer, 
+        %                                      RespondServer]),
+        % Ret
+        ?assert(true =:= true)
+    after
+        % Must be done first or else port binding is not released in time
+        %     for next run with same port.
+        gen_tcp:close(Socket),
+        % stop_server message is redundant to gen_server:stop(...) which
+        %     must be done to exit the gen_server and allow follow on tests
+        %     to use a new server with the same registered name.
+        gen_server:call(SocketServer, stop_server),
+        lists:foreach(fun (ToKill) -> gen_server:call(ToKill, kill) end, 
+                      [DelayServer, 
+                       SocketServer, 
+                       RespondServer])
+    end.
+
+-endif. % pur_supports_18
 
 -endif.
 

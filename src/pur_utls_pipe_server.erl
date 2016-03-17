@@ -109,6 +109,8 @@ code_change(OldVsn,
 %% handle_call
 %%----------------------------------------------------------------------------
 
+-ifdef(pur_supports_18).
+
 %%----------------------------------------------------------------------------
 %% Default call expression
 %%----------------------------------------------------------------------------
@@ -131,6 +133,41 @@ handle_call(Expr, From, State = #state{callback_module = Module,
         {stop, Reason, Reply, NCState} -> 
             {stop, Reason, Reply, State#state{callback_state = NCState}}
     end.
+
+-else. % pur_supports_18
+
+%%----------------------------------------------------------------------------
+%% kill
+%%----------------------------------------------------------------------------
+
+handle_call(kill, _From, State) ->
+    {stop, normal, ok, State};
+
+%%----------------------------------------------------------------------------
+%% Default call expression
+%%----------------------------------------------------------------------------
+
+handle_call(Expr, From, State = #state{callback_module = Module, 
+                                       callback_state = CState}) ->
+    case Module:handle_call(Expr, From, CState) of
+        {reply, Reply, NCState} -> 
+            {reply, Reply, State#state{callback_state = NCState}};
+        % Timeout includes hibernate
+        {reply, Reply, NCState, Timeout} -> 
+            {reply, Reply, State#state{callback_state = NCState}, Timeout};
+        {noreply, NCState} -> 
+            {noreply, State#state{callback_state = NCState}};
+        % Timeout includes hibernate
+        {noreply, NCState, Timeout} -> 
+            {noreply, State#state{callback_state = NCState}, Timeout};
+        {stop, Reason, NCState} -> 
+            {stop, Reason, State#state{callback_state = NCState}};
+        {stop, Reason, Reply, NCState} -> 
+            {stop, Reason, Reply, State#state{callback_state = NCState}}
+    end.
+
+-endif. % pur_supports_18
+
 
 %%----------------------------------------------------------------------------
 %% handle_cast
