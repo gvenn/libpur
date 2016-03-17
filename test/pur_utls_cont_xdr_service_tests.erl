@@ -150,6 +150,8 @@ generate_struct_params() ->
      ["begin", {10, InnerData}, "end"],
      ["begin", InnerData, "end"]}.
 
+-ifdef(pur_supports_18).
+
 xdr_send_multiple_and_wait_test() ->
     E = fun (Expr) -> element(1, Expr) end,
     Port = 10000,
@@ -192,6 +194,53 @@ xdr_send_multiple_and_wait_test() ->
     gen_server:stop(RespondServer),
     ?assert(TestWith =:= E(Response)).
     %?assert(true =:= true).
+
+-else. %pur_supports_18
+
+xdr_send_multiple_and_wait_test() ->
+    E = fun (Expr) -> element(1, Expr) end,
+    Port = 10000,
+    %DelaySendArgs = [{pipe_module, pur_utls_cont_xdr_service_tests},
+    %                 {pipe_fun, delay_send},
+    %                 {fun_state, #delay_state{delay_with = 1000}}],
+    ResponseArgs = [{pipe_module, pur_utls_cont_xdr_service_tests},
+                    {pipe_fun, response_pipe_fun},
+                    {fun_state, #response_state{}},
+                    {call_module, pur_utls_cont_xdr_service_tests},
+                    {call_fun, response_call_fun},
+                    {cast_module, pur_utls_cont_xdr_service_tests},
+                    {cast_fun, response_cast_fun}],
+    AM = pur_utls_accept_server,
+    RespondServer = start_server(pur_utls_fun_pipe, link, ResponseArgs, []),
+    Pipe = [#pipecomp{name = respond, 
+                      type = cast, 
+                      exec = set_response, 
+                      to = RespondServer, 
+                      pipe_name = main}],
+    AcceptServer = xdr_test_accept_server,
+    {CallArgs, Data, TestWith} = generate_struct_params(),
+    AcceptArgs = [{port, Port}, 
+                  {comm_module, pur_utls_cont_xdr_service},
+                  {header_size, 4},
+                  {xdr_args, CallArgs},
+                  {service_pipe, Pipe}],
+    AM:spawn(link, {local, AcceptServer}, AcceptArgs, []),
+    gen_server:call(AcceptServer, start),
+    Socket = connect(Port),
+    ToSend = pur_utls_xdr:encode_generic(Data, CallArgs),
+    send(ToSend, Socket),
+    Response = gen_server:call(RespondServer, wait_for_response),
+    % GDEBUG
+    %?LogIt(xdr_send_multiple_and_wait_test, "Response: ~n~p.", [Response]),
+    % Must be done first or else port binding is not released in time
+    %     for next run with same port.
+    gen_tcp:close(Socket),
+    gen_server:call(AcceptServer, kill),
+    gen_server:call(RespondServer, kill),
+    ?assert(TestWith =:= E(Response)).
+    %?assert(true =:= true).
+
+-endif. %pur_supports_18
 
 -endif.
 

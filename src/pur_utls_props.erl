@@ -311,6 +311,7 @@ convert_to_binary(Value) when is_binary(Value) ->
 %% convert_to_map
 %%----------------------------------------------------------------------------
 
+-ifdef(pur_supports_18).
 convert_to_map(Value) when is_map(Value) ->
     Value;
 convert_to_map(Value) when is_list(Value) ->
@@ -323,6 +324,20 @@ convert_to_map(Value) when is_atom(Value) ->
     #{Value => Value};
 convert_to_map(Value) when is_binary(Value) ->
     #{Value => Value}.
+-else.
+convert_to_map(Value) when is_map(Value) ->
+    Value;
+convert_to_map(Value) when is_list(Value) ->
+    maps:from_list(Value);
+convert_to_map(Value) when is_integer(Value) ->
+    maps:put(Value, Value, #{});
+convert_to_map(Value) when is_float(Value) ->
+    maps:put(Value, Value, #{});
+convert_to_map(Value) when is_atom(Value) ->
+    maps:put(Value, Value, #{});
+convert_to_map(Value) when is_binary(Value) ->
+    maps:put(Value, Value, #{}).
+-endif.
 
 %%----------------------------------------------------------------------------
 %% checked_list_to_atom

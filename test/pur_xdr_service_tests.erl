@@ -146,6 +146,8 @@ generate_struct_params() ->
      [{["begin", {10, InnerData}, "end"],
        {ok, {?TestType, ["begin", InnerData, "end"]}}}]}.
 
+-ifdef(pur_supports_18).
+
 xdr_send_multiple_and_wait_test() ->
     Port = 10001,
     % Not a pipe server component
@@ -178,7 +180,9 @@ xdr_send_multiple_and_wait_test() ->
     AcceptArgs = [{port, Port}, 
                   {comm_module, pur_xdr_service},
                   {header_length, byte_size(EncType)},
-                  {xdr_args_map, #{Type => CallArgs}},
+                  %Version 17 maps incompatility 
+                  %    {xdr_args_map, #{Type => CallArgs}},
+                  {xdr_args_map, maps:put(Type, CallArgs, #{})},
                   {service_pipe, Pipe}],
     AM:spawn(link, {local, AcceptServer}, AcceptArgs, []),
     gen_server:call(AcceptServer, start),
@@ -240,7 +244,9 @@ xdr_send_multiple_and_wait_direct_test() ->
     AcceptArgs = [{port, Port}, 
                   {comm_module, pur_xdr_service},
                   {header_length, byte_size(EncType)},
-                  {xdr_args_map, #{Type => CallArgs}},
+                  %Version 17 maps incompatility 
+                  %    {xdr_args_map, #{Type => CallArgs}},
+                  {xdr_args_map, maps:put(Type, CallArgs, #{})},
                   {read_with_actor, false},
                   {service_pipe, Pipe}],
     AM:spawn(link, {local, AcceptServer}, AcceptArgs, []),
@@ -270,6 +276,139 @@ xdr_send_multiple_and_wait_direct_test() ->
             ?assert(Test =:= Result)
         end,
         Asserts).
+
+-else. % pur_supports_18
+
+xdr_send_multiple_and_wait_test() ->
+    Port = 10001,
+    % Not a pipe server component
+    %DelaySendArgs = [{pipe_module, pur_xdr_service_tests},
+    %                 {pipe_fun, delay_send},
+    %                 {fun_state, #delay_state{delay_with = 1000}}],
+    DelaySendArgs = [{cast_module, pur_xdr_service_tests},
+                     {cast_fun, delay_send_fun},
+                     {fun_state, #delay_state{delay_with = 20}}],
+    ResponseArgs = [{pipe_module, pur_xdr_service_tests},
+                    {pipe_fun, response_pipe_fun},
+                    {fun_state, #response_state{}},
+                    {call_module, pur_xdr_service_tests},
+                    {call_fun, response_call_fun},
+                    {cast_module, pur_xdr_service_tests},
+                    {cast_fun, response_cast_fun}],
+    AM = pur_utls_accept_server,
+    DelayServer = start_server(pur_utls_fun_pipe, link, DelaySendArgs, []),
+    RespondServer = start_server(pur_utls_fun_pipe, link, ResponseArgs, []),
+    Pipe = [#pipecomp{name = respond, 
+                      type = cast, 
+                      exec = set_response, 
+                      to = RespondServer, 
+                      pipe_name = main}],
+    AcceptServer = xdr_test_accept_server,
+    {Type, CallArgs, CallTestData} = generate_struct_params(),
+    % GDEBUG
+    %EncType = pur_utls_xdr:encode_uint(16#01, CallArgs),
+    EncType = pur_utls_xdr:encode_uint(Type, CallArgs),
+    AcceptArgs = [{port, Port}, 
+                  {comm_module, pur_xdr_service},
+                  {header_length, byte_size(EncType)},
+                  %Version 17 maps incompatility 
+                  %    {xdr_args_map, #{Type => CallArgs}},
+                  {xdr_args_map, maps:put(Type, CallArgs, #{})},
+                  {service_pipe, Pipe}],
+    AM:spawn(link, {local, AcceptServer}, AcceptArgs, []),
+    gen_server:call(AcceptServer, start),
+    Socket = connect(Port),
+    Asserts = 
+        lists:map(
+            fun ({CallData, TestData}) ->
+                EncPayload = pur_utls_xdr:encode_generic(CallData, CallArgs),
+                ToSend = 
+                    <<EncType/bitstring, EncPayload/bitstring>>,
+                gen_server:cast(DelayServer, {send, ToSend, Socket}),
+                Response = gen_server:call(RespondServer, wait_for_response),
+                {TestData, Response}
+            end,
+            CallTestData),
+    % GDEBUG
+    %?LogIt(xdr_send_multiple_and_wait_test, 
+    %       "Assert contents: ~n~p.", 
+    %       [Asserts]),
+    gen_tcp:close(Socket),
+    gen_server:call(AcceptServer, kill),
+    gen_server:call(RespondServer, kill),
+    gen_server:call(DelayServer, kill),
+    lists:map(
+        fun ({Test, Result}) ->
+            ?assert(Test =:= Result)
+        end,
+        Asserts).
+
+xdr_send_multiple_and_wait_direct_test() ->
+    Port = 10001,
+    % Not a pipe server component
+    %DelaySendArgs = [{pipe_module, pur_xdr_service_tests},
+    %                 {pipe_fun, delay_send},
+    %                 {fun_state, #delay_state{delay_with = 1000}}],
+    DelaySendArgs = [{cast_module, pur_xdr_service_tests},
+                     {cast_fun, delay_send_fun},
+                     {fun_state, #delay_state{delay_with = 20}}],
+    ResponseArgs = [{pipe_module, pur_xdr_service_tests},
+                    {pipe_fun, response_pipe_fun},
+                    {fun_state, #response_state{}},
+                    {call_module, pur_xdr_service_tests},
+                    {call_fun, response_call_fun},
+                    {cast_module, pur_xdr_service_tests},
+                    {cast_fun, response_cast_fun}],
+    AM = pur_utls_accept_server,
+    DelayServer = start_server(pur_utls_fun_pipe, link, DelaySendArgs, []),
+    RespondServer = start_server(pur_utls_fun_pipe, link, ResponseArgs, []),
+    Pipe = [#pipecomp{name = respond, 
+                      type = cast, 
+                      exec = set_response, 
+                      to = RespondServer, 
+                      pipe_name = main}],
+    AcceptServer = xdr_test_accept_server,
+    {Type, CallArgs, CallTestData} = generate_struct_params(),
+    % GDEBUG
+    %EncType = pur_utls_xdr:encode_uint(16#01, CallArgs),
+    EncType = pur_utls_xdr:encode_uint(Type, CallArgs),
+    AcceptArgs = [{port, Port}, 
+                  {comm_module, pur_xdr_service},
+                  {header_length, byte_size(EncType)},
+                  %Version 17 maps incompatility 
+                  %    {xdr_args_map, #{Type => CallArgs}},
+                  {xdr_args_map, maps:put(Type, CallArgs, #{})},
+                  {read_with_actor, false},
+                  {service_pipe, Pipe}],
+    AM:spawn(link, {local, AcceptServer}, AcceptArgs, []),
+    gen_server:call(AcceptServer, start),
+    Socket = connect(Port),
+    Asserts = 
+        lists:map(
+            fun ({CallData, TestData}) ->
+                EncPayload = pur_utls_xdr:encode_generic(CallData, CallArgs),
+                ToSend = 
+                    <<EncType/bitstring, EncPayload/bitstring>>,
+                gen_server:cast(DelayServer, {send, ToSend, Socket}),
+                Response = gen_server:call(RespondServer, wait_for_response),
+                {TestData, Response}
+            end,
+            CallTestData),
+    % GDEBUG
+    %?LogIt(xdr_send_multiple_and_wait_direct_test, 
+    %       "Assert contents: ~n~p.", 
+    %       [Asserts]),
+    gen_tcp:close(Socket),
+    gen_server:call(AcceptServer, kill),
+    gen_server:call(RespondServer, kill),
+    gen_server:call(DelayServer, kill),
+    lists:map(
+        fun ({Test, Result}) ->
+            ?assert(Test =:= Result)
+        end,
+        Asserts).
+
+-endif. % pur_supports_18
 
 -endif.
 
