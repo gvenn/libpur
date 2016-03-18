@@ -1,6 +1,6 @@
 language: erlang
 notifications:
-  email: ben@nothingmuch.com
+  email: garrison.venn@gmail.com
 otp_release:
   - 18.2
   - 18.1
