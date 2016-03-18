@@ -33,6 +33,6 @@ Caveats
 8. Pipe semantic not fully flushed out.
 9. Logging system does not provide 3rd party developers with mechanism to control/overide logging mechanism.
 10. rebar3 eunit produces logs of socket errors due to test server side components being shutdown after each associated test. Ignore these. Only test failures are indicative of issues.
-11. Tested on OS X with erlang 18.1, and 17.5.
+11. Tested on OS X with erlang 18.1, and 17.5; not sure about the full implications of using maps with 17.x.
 
 
