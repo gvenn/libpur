@@ -199,7 +199,8 @@ handle_call(get_unit_id, _From, State = #state{unit_id = UnitId}) ->
 %% set_unit_id
 %%---------------------------------------------------------------------------
 
-handle_call({set_unit_id, ReqUnitId}, _From, State) ->
+handle_call({set_unit_id, ReqUnitId}, _From, State) when
+        is_integer(ReqUnitId) ->
     <<UnitId>> = <<ReqUnitId:8>>,
     {reply, ok, State#state{unit_id = UnitId}};
 
