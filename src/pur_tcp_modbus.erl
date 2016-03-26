@@ -186,7 +186,7 @@ handle_call(connect,
     {reply, Reply, NState};
 
 handle_call(connect, _From, State) ->
-    {reply, true, State};
+    {reply, ok, State};
 
 %%----------------------------------------------------------------------------
 %% get_unit_id

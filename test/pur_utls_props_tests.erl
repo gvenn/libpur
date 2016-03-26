@@ -26,6 +26,11 @@
 
 -record(record_test, {one, two, three, four, five}).
 
+-record(record_test4, {one = 1, two = 2, three = 3, four = 4}).
+-record(record_test3, {one = 1, two = 2, three = 3}).
+-record(record_test2, {one = 1, two = 2}).
+-record(record_test1, {one = 1}).
+
 basic_tuple_test() ->
     Tuple = erlang:make_tuple(5, undefined),
     Keys = ["one", "two", "three", "four", "five"],
@@ -73,6 +78,56 @@ basic_record_test() ->
                                five = 5}},
     ResultRecord = pur_utls_props:set_from_props(Props, Descriptors, Record),
     %?LogIt(basic_record_test, 
+    %       "~nTestRecord: ~p,~nResultRecord: ~p.", 
+    %       [TestRecord, ResultRecord]),
+    ?assert(TestRecord =:= ResultRecord).
+
+nested_record_test() ->
+    Record = #record_test{one = 1,
+                          two = #record_test2{},
+                          three = #record_test3{
+                                      two = #record_test4{
+                                                three = #record_test1{}}},
+                          four = 4,
+                          five = 5},
+    Props = [{"one", 101}, {"two", 102}, {"three", 103}, {"four", 104}],
+    TestRecord = {true, 
+                  #record_test{one = 101, 
+                               two = #record_test2{one = 102},
+                               three = #record_test3{
+                                           two = #record_test4{
+                                                     three = #record_test1{
+                                                                 one = 103}}},
+                               four = 4, 
+                               five = 104}},
+    ResultRecord = pur_utls_props:set_from_props(
+                       Props, 
+                       [#propdesc{name = "one", 
+                                  index = #record_test.one,
+                                  ret_type = integer,
+                                  directive = required,
+                                  dirvalue = true},
+                        #propdesc{name = "two",
+                                  index = [#record_test.two, 
+                                           #record_test2.one],
+                                  ret_type = integer,
+                                  directive = required,
+                                  dirvalue = true},
+                        #propdesc{name = "three",
+                                  index = [#record_test.three,
+                                           #record_test3.two,
+                                           #record_test4.three,
+                                           #record_test1.one],
+                                  ret_type = integer,
+                                  directive = default,
+                                  dirvalue = true},
+                        #propdesc{name = "four",
+                                  index = #record_test.five,
+                                  ret_type = integer,
+                                  directive = default,
+                                  dirvalue = true}],
+                       Record),
+    %?LogIt(nested_record_test, 
     %       "~nTestRecord: ~p,~nResultRecord: ~p.", 
     %       [TestRecord, ResultRecord]),
     ?assert(TestRecord =:= ResultRecord).

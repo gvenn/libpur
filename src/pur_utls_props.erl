@@ -90,6 +90,21 @@ set_from_prop(Desc = #propdesc{name = PropName,
         {error, Reason} ->
             {Props, false, Reason, TupleToSet}
     end;
+set_from_prop(Desc = #propdesc{index = [LastIndex]},
+              SecondArg = {_Props, true, _, _TupleToSet}) ->
+    set_from_prop(Desc#propdesc{index = LastIndex}, SecondArg);
+% NOT Tail Recursive
+set_from_prop(Desc = #propdesc{index = [NextIndex|RIndicies]},
+              {Props, true, Reason, OuterTuple}) ->
+    InnerTuple = element(NextIndex, OuterTuple),
+    case set_from_prop(Desc#propdesc{index = RIndicies},
+                       {Props, true, Reason, InnerTuple}) of
+        {Props, true, Reason, NInnerTuple} ->
+            NOuterTuple = setelement(NextIndex, OuterTuple, NInnerTuple),
+            {Props, true, Reason, NOuterTuple};
+        {Props, Flag, Reason, _} ->
+            {Props, Flag, Reason, OuterTuple}
+    end;
 set_from_prop(_,
               ToRet = {_Props, false, _Reason, _TupleToSet}) ->
     ToRet.
