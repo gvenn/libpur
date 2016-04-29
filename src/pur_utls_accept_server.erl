@@ -43,6 +43,7 @@
 -record(state, {backlog, 
                 accept_timeout, 
                 port, 
+                socket_options,
                 comm_module, 
                 comm_props,
                 socket,
@@ -74,6 +75,10 @@ init(Props) ->
                    ret_type = integer,
                    directive = required,
                    dirvalue = true},
+         #propdesc{name = "socket_options",
+                   index = #state.socket_options,
+                   directive = default,
+                   dirvalue = []},
          #propdesc{name = "comm_module",
                    index = #state.comm_module,
                    ret_type = atom,
@@ -263,6 +268,7 @@ spawn(link, StartArgs, StartOptions) ->
 
 start_listen(State = #state{backlog = BackLog, 
                             port = Port,
+                            socket_options = IOptions,
                             socket = undefined,
                             send_timeout = SendTimeout,
                             max_listen_attempts = NumTrys}) ->
@@ -273,7 +279,7 @@ start_listen(State = #state{backlog = BackLog,
                 ({send_timeout, _}) -> false;
                 (_EProp) -> true
             end,
-            ?DefaultListenOptions),
+            IOptions ++ ?DefaultListenOptions),
     NOptions =
         [{backlog, BackLog}, {send_timeout, SendTimeout}|Options],
     case pur_utls_misc:iterate(NumTrys, 
