@@ -740,7 +740,7 @@ try_read(Count, Acc = {_,
                     %     admin functions). 
                     %     Using pur_tcp_modbus_server in place of 
                     %     pur_tcp_modbus_iter_server removes this effect.
-                    try_read(Count, Acc);
+                    try_read(undefined, Acc);
                 _ ->
                     % Note: We are NOT treating this as an immediate error!
                     ?LogIt(try_read, 
